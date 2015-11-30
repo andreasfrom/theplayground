@@ -53,7 +53,7 @@ The input is illustrated in figure [[fig:platforms]].
 
 #+NAME: fig:platforms
 #+CAPTION: Visualisation of the sample input
-[[./figures/platforms.svg]]
+[[./figures/platforms.gif]]
 
 Now the thing is that we need to turn this set of platforms into a playground, where you enter at platform 0 and leave from platform $P-1$.
 To do this we will build activities from one platform to another.
@@ -63,32 +63,32 @@ The only output produced is the maximum number of trails; we don't need to print
 
 The four different activities are (taken almost verbatim from the problem description):
 
-- NEWS[fn:: North, East, West, South] Slide (A1, red) :: Can be built from a platform A to any other platform with the same x- or y-coordinate as A. That is, any platform on the same horizontal or vertical line as A.
+- NEWS[fn::North, East, West, South] Slide (A1, red) :: Can be built from a platform A to any other platform with the same x- or y-coordinate as A. That is, any platform on the same horizontal or vertical line as A.
 - Human Cannon (A2, blue) :: Can be built from a platform A to the platform furthest away from A in euclidean distance. In case of a tie, the platform that appeared first in the input wins.
 - Platform Trampoline (A3, green) :: Can be built from a platform A to a platform B if there are at least 2 platforms on the line segment between A and B.
-- EOF[fn:: End-Of-Fun] Wormhole (A4, orange) :: Can be built from any platform directly to the end-platform.
+- EOF[fn::End-Of-Fun] Wormhole (A4, orange) :: Can be built from any platform directly to the end-platform.
 
 These are illustrated (without capacities) one by one on figures [[fig:a1]], [[fig:a2]], [[fig:a3]], [[fig:a4]] and together on figure [[fig:a1234]].
 
 #+NAME: fig:a1
 #+CAPTION: A1s (same horisontal or vertical line)
-[[./figures/a1.svg]]
+[[./figures/a1.gif]]
 
 #+NAME: fig:a2
 #+CAPTION: A2s (furthest away)
-[[./figures/a2.svg]]
+[[./figures/a2.gif]]
 
 #+NAME: fig:a3
 #+CAPTION: A3s (2 or more platforms in-between)
-[[./figures/a3.svg]]
+[[./figures/a3.gif]]
 
 #+NAME: fig:a4
 #+CAPTION: A4s (end of fun)
-[[./figures/a4.svg]]
+[[./figures/a4.gif]]
 
 #+NAME: fig:a1234
 #+CAPTION: All possible activities for the sample input
-[[./figures/a1234.svg]]
+[[./figures/a1234.gif]]
 
 * Modeling the Problem
 We are going to solve this a [[https://en.wikipedia.org/wiki/Maximum_flow_problem][maximum flow problem]], and I'll assume the reader is familiar with these.
@@ -105,7 +105,7 @@ The trick is to insert a dummy vertex as in figure [[fig:vertexcaps]].
 
 #+NAME: fig:vertexcaps
 #+CAPTION: Converting a vertex capacity into an edge capacity
-[[./figures/vertexcapacity.svg]]
+[[./figures/vertexcapacity.gif]]
 
 Any incoming edges will still go to the original vertex, but any outgoing will start at the new vertex instead.
 Now to get from the old vertex to the new vertex, the flow must cross an edge with the capacity of the old vertex.
@@ -118,7 +118,7 @@ Notice how the original capacities can now be read off the edges instead of the 
 
 #+NAME: fig:edgecaps
 #+CAPTION: Our sample platforms with edge capacities
-[[./figures/edgecaps.svg]]
+[[./figures/edgecaps.gif]]
 
 The vertex numbering scheme is as follows:
 For a platform $i$, the four new vertices are named $i+x\cdot P$ where A$x$ is the matching activity and $P$ still the total number of platforms.
@@ -132,7 +132,7 @@ Compare this to one of the first four graphs: All edges are still there, they ju
 
 #+NAME: fig:a1234all
 #+CAPTION: The final flow network
-[[./figures/a1234all.svg]]
+[[./figures/a1234all.gif]]
 
 I'm using Edmonds-Karp to find the actual maximum flow, a possible solution with maximum flow 5 can be seen on figure [[fig:sol]].
 This doesn't use A2-activities at all, but is the one my implementation finds.
@@ -141,7 +141,7 @@ Another trail uses A1-activities to go from 0 to 1 to 7, and so on.
 
 #+NAME: fig:sol
 #+CAPTION: One solution to the sample input
-[[./figures/sol.svg]]
+[[./figures/sol.gif]]
 
 *  Setting up the Graph
 Now we know how to model the problem as something we can solve with an off-the-shelf algorithm, so we just need to set up this flow network efficiently.
