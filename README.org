@@ -45,7 +45,7 @@ I will use the input in listing [[text:platforms]] as a running example.
 9 3 0 0 0 0
 #+END_SRC
 
-The first line is the number of platforms, /P/, the next /P/ lines are the platforms specified by six parameters: x- and y-coordinate and four capacities.
+The first line is the number of platforms, P, the next P lines are the platforms specified by six parameters: x- and y-coordinate and four capacities.
 The platforms are implicitly numbered by their position in the input and their positions are distinct.
 We're given at least two platforms and at most 100.000.
 Both coordinates and capacities are between 0 and 100.000.
@@ -55,7 +55,7 @@ The input is illustrated in figure [[fig:platforms]].
 #+CAPTION: Visualisation of the sample input
 [[./figures/platforms.gif]]
 
-Now the thing is that we need to turn this set of platforms into a playground, where you enter at platform 0 and leave from platform /P-1/.
+Now the thing is that we need to turn this set of platforms into a playground, where you enter at platform 0 and leave from platform P-1.
 To do this we will build activities from one platform to another.
 There are four kinds of activities, and the four capacities specify how many of each of these can be build from a specific platform.
 A trail is a path via a unique set of activities from the start-platform to the end-platform and the task is to maximize the number of trails.
@@ -121,8 +121,8 @@ Notice how the original capacities can now be read off the edges instead of the 
 [[./figures/edgecaps.gif]]
 
 The vertex numbering scheme is as follows:
-For a platform /i/, the four new vertices are named /i+x\cdot P/ where A/x/ is the matching activity and /P/ still the total number of platforms.
-So any A1 activities from the start-platform (/i=0/) in our example will now go from platform /0+1\cdot 8=8/ instead.
+For a platform i, the four new vertices are named i+x\cdot P where Ax is the matching activity and P still the total number of platforms.
+So any A1 activities from the start-platform (i=0) in our example will now go from platform 0+1\cdot 8=8 instead.
 Notice that this is colored red in figure [[fig:edgecaps]] as expected .
 
 The final graph which we can run a standard flow algorithm on is given in figure [[fig:a1234all]].
@@ -165,11 +165,11 @@ The algorithm then becomes
 
 - Sort the platforms by x- then y-coordinate (left to right, bottom up)
 - Initialize an empty hashtable
-- For each platform /p/
-  + For each platform /q/ ahead of /p/ in the sorted order
-    - Calculate the slope between /p/ and /q/
+- For each platform p
+  + For each platform q ahead of p in the sorted order
+    - Calculate the slope between p and q
     - Look up the slope in our hash table
-    - If the value associated with the slope is 2 (or more), draw an A3-activity from /p/ to /q/ and from /q/ to /p/
+    - If the value associated with the slope is 2 (or more), draw an A3-activity from p to q and from q to p
     - Otherwise, increase the count
   + Clear the hash table
 
@@ -184,24 +184,24 @@ We see that the only platform to which an A3-activity can be built from 0 is num
 [[./figures/slopes/slopes.gif]]
 
 
-With expected constant time lookup in the hash table, the above runs in /O(P^2)/ time.
-That's the best upper bound we can hope for, as there might be upwards of /P^2/ legal A3-activities; consider the case where all platforms lie on a single line.
-Unfortunately this is also the lower bound of the algorithm: we always spend /O(P^2)/ time, even if no A3-activities can be constructed.
-I would love to solve this with a lower bound of /\Omega(P\log P)/ or something instead.
+With expected constant time lookup in the hash table, the above runs in O(P^2) time.
+That's the best upper bound we can hope for, as there might be upwards of P^2 legal A3-activities; consider the case where all platforms lie on a single line.
+Unfortunately this is also the lower bound of the algorithm: we always spend O(P^2) time, even if no A3-activities can be constructed.
+I would love to solve this with a lower bound of \Omega(P\log P) or something instead.
 
 ** NEWS Slide (A1, red)
 We have already committed to checking every platform from every other, so this one is simple: simply see if the x- or y-coordinates match and construct the activity in both directions, because we only look ahead.
-In the implementation I make the equivalent check if either /\Delta x/ or /\Delta y/ is 0, because it seemed a bit faster.
+In the implementation I make the equivalent check if either \Delta x or \Delta y is 0, because it seemed a bit faster.
 
-This, as above, runs in /\Theta(P^2)/ time.
+This, as above, runs in \Theta(P^2) time.
 By sorting the platforms by x- and y-coordinate separately, all platforms on vertical and horizontal lines, respectively, would be next to each other.
-Then one could iterate through the array and construct the activities in /O(P^2)/ time worst-case, but /\Omega(P\log P)/ in the best.
+Then one could iterate through the array and construct the activities in O(P^2) time worst-case, but \Omega(P\log P) in the best.
 
 ** Human Cannon (A2, blue)
 This becomes slightly more complicated because we only look ahead.
 
-I maintain two arrays of length /P/ of platforms and distances respectively.
-These are indexed by platform number, so the platform furthest away from platform /x/ encountered so far is found at index /x/ in the first array and the distance in the second.
+I maintain two arrays of length P of platforms and distances respectively.
+These are indexed by platform number, so the platform furthest away from platform x encountered so far is found at index x in the first array and the distance in the second.
 Then every time we calculate the distance between two platforms, look up both platforms in the arrays and see if one needs updating.
 When finished with a platform, draw the activity to the platform in the array.
 
@@ -209,9 +209,9 @@ The arrays are needed to solve the following problem:
 Consider platform 5 in figure [[fig:a2]].
 From 5 we will only look at platforms 7 and 6 because we look ahead, so at platform 0 we need to have remembered that 0 is furthest away so far.
 
-Because /\sqrt{x}\gt \sqrt{y}/ implies /x\gt y/, I save the square root and compare manhattan distances instead of euclidean.
+Because \sqrt{x}\gt \sqrt{y} implies x\gt y, I save the square root and compare manhattan distances instead of euclidean.
 
-Again I have chosen the straight-forward /\Theta(P^2)/ solution, because the A3-activities dominate regardless, but this is actually solvable in /O(P\log P)/ time.
+Again I have chosen the straight-forward \Theta(P^2) solution, because the A3-activities dominate regardless, but this is actually solvable in O(P\log P) time.
 See [[http://www.researchgate.net/publication/220115912_An_O%28n_log_n%29_algorithm_for_the_all-farthest-segments_problem_for_a_planar_set_of_points][An O(n log n) algorithm for the all-farthest-segments problem for a planar set of points]].
 
 If I could construct the A3-activities faster, these optimizations would be worth doing.
@@ -396,7 +396,7 @@ void insert_edge(Graph * const G, uint32_t const from, uint32_t const to, uint32
 
 ** Queue
 This queue is taken straight from CLRS.
-It's used for the breadth-first search in Edmonds-Karp where we know the upper bound, /5P/, of vertices enqueued and we know this doesn't get too large.
+It's used for the breadth-first search in Edmonds-Karp where we know the upper bound, 5P, of vertices enqueued and we know this doesn't get too large.
 So we just pre-allocate a big enough chunk of memory and keep two indices into it: one for the head and one for the tail.
 Enqueuing and dequeuing is just a read/write and a modulo operation and more importantly, we can clear the queue in constant time by just setting these to 0.
 
@@ -622,7 +622,7 @@ void insertion_sort(Platform * const xs, size_t const len) {
 
 ** Hashing
 For the hash table I'm just using a simple linear probing technique.
-The slopes turn out to be really well distributed and I'm using a load factor of at most /\frac15/, so clustering is minimal and this turns out to work nicely.
+The slopes turn out to be really well distributed and I'm using a load factor of at most \frac15, so clustering is minimal and this turns out to work nicely.
 
 Because the counts are stored as single byte we don't want to increment it unnecessarily and risk an overflow.
 Fortunately the compiler seems to optimize the very straight-forward code really well.
@@ -770,7 +770,7 @@ First the edges for converting from vertex to edge capacities are inserted accor
 #+END_SRC
 
 Then the inner loop, that looks only at platforms to the left of and above ~p~.
-/\Delta x/ and /\Delta y/ are calculated for the slope and used to construct A1-activities as well.
+\Delta x and \Delta y are calculated for the slope and used to construct A1-activities as well.
 
 #+BEGIN_SRC c
     for (uint32_t j = i+1; j < P; j++) {
