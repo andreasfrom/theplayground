@@ -1,0 +1,15 @@
+digraph G {
+margin = 0;
+forcelabels = true;
+node [ shape = circle, penwidth = 2 ];
+
+0 [ pos = "0,1!", xlabel = "4/0/2/0", penwidth = 4 ];
+1 [ pos = "2,2!", xlabel = "1/2/3/4" ];
+2 [ pos = "4,1!", xlabel = "3/1/1/0" ];
+3 [ pos = "4,3!", xlabel = "1/0/0/1" ];
+4 [ pos = "6,4!", xlabel = "0/0/1/1" ];
+5 [ pos = "9,1!", xlabel = "1/0/0/2" ];
+6 [ pos = "9,4!", xlabel = "2/0/0/1" ];
+7 [ pos = "9,3!", xlabel = "0/0/0/0", penwidth = 4 ];
+
+}

@@ -1,0 +1,30 @@
+digraph G {
+  rankdir = LR;
+  
+  a1 -> w [ color = red ];
+  a2 -> w [ color = orange ];
+  w -> b1 [ color = blue ];
+  w -> b2 [ color = purple ];
+
+  b2 -> c1 [ style = dashed ];
+
+  c1 -> w1 [ color = red ];
+  c2 -> w1 [ color = orange ];
+
+  w1 -> w2 [ label = "w" ];
+
+  w2 -> d1 [ color = blue ];
+  w2 -> d2 [ color = purple ];
+
+  a1 [style=invis];
+  a2 [style=invis];
+  b1 [style=invis];
+  b2 [style=invis];
+  c1 [style=invis];
+  c2 [style=invis];
+  d1 [style=invis];
+  d2 [style=invis];
+
+  w1 [label=""];
+  w2 [label=""];
+}
