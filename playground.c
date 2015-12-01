@@ -99,8 +99,8 @@ void convex_hull(Platform * points, size_t npoints, Platform ** const out_hull, 
 
 Graph graph_alloc(Vertex * const vertices, size_t const V) {
   for (size_t i = 0; i < V; i++) {
-    Edge * const edge_list = malloc(64 * sizeof *edge_list);
-    vertices[i] = (Vertex) {.edge_list = edge_list, .size = 0, .capacity = 64, .parent_edge = NULL};
+    Edge * const edge_list = malloc(32 * sizeof *edge_list);
+    vertices[i] = (Vertex) {.edge_list = edge_list, .size = 0, .capacity = 32, .parent_edge = NULL};
   }
 
   return (Graph) {.vertices = vertices, .size = V};
@@ -246,7 +246,6 @@ uint32_t edmonds_karp(Graph * const G, uint32_t const source, uint32_t const sin
 
 void insert_flow_edge(Graph * const  G, uint32_t const from, uint32_t const to, uint32_t const capacity) {
   assert(G != NULL);
-  assert(from != to);
 
   if (capacity == 0) return;
 
@@ -438,9 +437,9 @@ int main() {
   /* Vertex schema:
    * i: ingoing (original vertex)
    * i+1*P: A1
-   * i+2*P: A2
    * i+3*P: A3
-   * i+4*P: A4
+   * There can only be one of each of A2 and A4,
+   * so we don't need the dummy vertex
    */
 
   for (uint32_t i = 0; i < P; i++) {
@@ -448,12 +447,10 @@ int main() {
 
     // Vertex -> edge capacities
     insert_flow_edge(&G, p.n, p.n+1*P, p.a1);
-    insert_flow_edge(&G, p.n, p.n+2*P, p.a2);
     insert_flow_edge(&G, p.n, p.n+3*P, p.a3);
-    insert_flow_edge(&G, p.n, p.n+4*P, p.a4);
 
     // A4 (EOF)
-    insert_flow_edge(&G, p.n+4*P, P-1, p.a4);
+    insert_flow_edge(&G, p.n, P-1, p.a4);
   }
 
 #ifndef CODEJUDGE
@@ -509,7 +506,7 @@ int main() {
       }
     }
 
-    insert_flow_edge(&G, p.n+2*P, furthest, p.a2);
+    insert_flow_edge(&G, p.n, furthest, p.a2);
   }
 
 #ifndef CODEJUDGE
