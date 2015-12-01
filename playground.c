@@ -19,7 +19,9 @@
 
 #define MAX_LINE 42
 #define SORT_CUTOFF 16
-#define VERTEX_FACTOR 5
+#define VERTEX_FACTOR 3
+
+#define MS(S, T) (T.tv_sec - S.tv_sec) * 1000.0 + (T.tv_usec - S.tv_usec) / 1000.0
 
 /*
  * STRUCTS
@@ -90,7 +92,7 @@ void sort(Platform * const ps, size_t const P, LESS less);
 uint32_t next_prime(uint32_t const a);
 bool update_slope_count(uint32_t * const slopes, uint8_t * const counts, uint32_t const slopes_len, uint32_t const key);
 
-double ccw(Platform * p1, Platform * p2, Platform * p3);
+int ccw(Platform * p1, Platform * p2, Platform * p3);
 void convex_hull(Platform * points, size_t npoints, Platform ** const out_hull, size_t * out_hullsize);
 
 /*
@@ -369,7 +371,7 @@ uint32_t next_prime(uint32_t const a) {
  * CONVEX HULL
  */
 
-double ccw(Platform * p1, Platform * p2, Platform * p3) {
+int ccw(Platform * p1, Platform * p2, Platform * p3) {
   return (p2->x - p1->x)*(p3->y - p1->y) - (p2->y - p1->y)*(p3->x - p1->x);
 }
 
@@ -380,13 +382,13 @@ void convex_hull(Platform * points, size_t npoints, Platform ** const out_hull, 
 
   hull = *out_hull;
 
-  for (i = 0; i < (int64_t) npoints; ++i) {
-    while (k >= 2 && ccw(&hull[k-2], &hull[k-1], &points[i]) <= 0) --k;
+  for (i = 0; i < (int64_t) npoints; i++) {
+    while (k >= 2 && ccw(&hull[k-2], &hull[k-1], &points[i]) <= 0) k--;
     hull[k++] = points[i];
   }
 
   for (i = (int64_t) npoints-2, t = k+1; i >= 0; i--) {
-    while (k >= t && ccw(&hull[k-2], &hull[k-1], &points[i]) <= 0) --k;
+    while (k >= t && ccw(&hull[k-2], &hull[k-1], &points[i]) <= 0) k--;
     hull[k++] = points[i];
   }
 
@@ -413,7 +415,7 @@ int main() {
   fgets(line, MAX_LINE, stdin);
   sscanf(line, "%d", &P);
 
-  uint32_t const n_slopes = next_prime(VERTEX_FACTOR*P);
+  uint32_t const n_slopes = next_prime(5*P);
 
   Platform * const ps = malloc(P * sizeof *ps);
   Vertex * const vertices = malloc(VERTEX_FACTOR*P * sizeof *vertices);
@@ -437,27 +439,15 @@ int main() {
   /* Vertex schema:
    * i: ingoing (original vertex)
    * i+1*P: A1
-   * i+3*P: A3
+   * i+2*P: A3
    * There can only be one of each of A2 and A4,
-   * so we don't need the dummy vertex
+   * so we don't need the dummy vertices for these
    */
 
-  for (uint32_t i = 0; i < P; i++) {
-    Platform const p = ps[i];
+  /*
+   * A1 (NEWS)
+   */
 
-    // Vertex -> edge capacities
-    insert_flow_edge(&G, p.n, p.n+1*P, p.a1);
-    insert_flow_edge(&G, p.n, p.n+3*P, p.a3);
-
-    // A4 (EOF)
-    insert_flow_edge(&G, p.n, P-1, p.a4);
-  }
-
-#ifndef CODEJUDGE
-  gettimeofday(&t3, NULL);
-#endif
-
-  // A1 (NEWS)
   sort(ps, P, lessy);
 
   for (size_t i = 0; i < P; i++) {
@@ -478,12 +468,13 @@ int main() {
     }
   }
 
-
 #ifndef CODEJUDGE
-  gettimeofday(&t4, NULL);
+  gettimeofday(&t3, NULL);
 #endif
 
-  // A2 (Human Cannon)
+  /*
+   * A2 (Human Cannon)
+   */
 
   size_t hull_size;
   convex_hull(ps, P, &hull, &hull_size);
@@ -510,10 +501,13 @@ int main() {
   }
 
 #ifndef CODEJUDGE
-  gettimeofday(&t5, NULL);
+  gettimeofday(&t4, NULL);
 #endif
 
-  // A3 (Platform Trampoline)
+  /*
+   * A3 (Platform Trampoline)
+   */
+
   for (uint32_t i = 0; i < P; i++) {
     Platform const p = ps[i];
     if (p.a3 == 0) continue;
@@ -522,23 +516,44 @@ int main() {
       Platform const q = ps[j];
 
       int64_t const dx = p.x - q.x, dy = p.y - q.y;
-
       float const fslope = (float) dy / dx;
       uint32_t slope;
       memcpy(&slope, &fslope, sizeof slope);
-      if (update_slope_count(slopes, counts, n_slopes, slope)) {
-        insert_flow_edge(&G, p.n+3*P, q.n, p.a3);
-        insert_flow_edge(&G, q.n+3*P, p.n, q.a3);
-      }
 
+      if (update_slope_count(slopes, counts, n_slopes, slope)) {
+        insert_flow_edge(&G, p.n+2*P, q.n, p.a3);
+        insert_flow_edge(&G, q.n+2*P, p.n, q.a3);
+      }
     }
 
     memset(counts, 0, n_slopes * sizeof *counts);
   }
 
 #ifndef CODEJUDGE
+  gettimeofday(&t5, NULL);
+#endif
+
+  /*
+   * A4 (EOF)
+   * vertex -> edge capacities
+   */
+
+  for (uint32_t i = 0; i < P; i++) {
+    Platform const p = ps[i];
+
+    insert_flow_edge(&G, p.n, p.n+  P, p.a1);
+    insert_flow_edge(&G, p.n, p.n+2*P, p.a3);
+
+    insert_flow_edge(&G, p.n, P-1, p.a4);
+  }
+
+#ifndef CODEJUDGE
   gettimeofday(&t6, NULL);
 #endif
+
+  /*
+   * FLOW
+   */
 
   uint32_t const flow = edmonds_karp(&G, 0, P-1, slopes, counts, caps);
   printf("%u\n", flow);
@@ -555,21 +570,16 @@ int main() {
   graph_free(&G);
   free(vertices);
 
-  double const input_time = (t2.tv_sec - t1.tv_sec) * 1000.0 + (t2.tv_usec - t1.tv_usec) / 1000.0;
+  double const
+    input_time = MS(t1, t2),
+    a1_time = MS(t2, t3),
+    a2_time = MS(t3, t4),
+    a3_time = MS(t4, t5),
+    a4_time = MS(t5, t6),
+    flow_time = MS(t6, t7),
+    total_time = MS(t1, t7);
 
-  double const a4_time = (t3.tv_sec - t2.tv_sec) * 1000.0 + (t3.tv_usec - t2.tv_usec) / 1000.0;
-
-  double const a1_time = (t4.tv_sec - t3.tv_sec) * 1000.0 + (t4.tv_usec - t3.tv_usec) / 1000.0;
-
-  double const a2_time = (t5.tv_sec - t4.tv_sec) * 1000.0 + (t5.tv_usec - t4.tv_usec) / 1000.0;
-
-  double const a3_time = (t6.tv_sec - t5.tv_sec) * 1000.0 + (t6.tv_usec - t5.tv_usec) / 1000.0;
-
-  double const flow_time = (t7.tv_sec - t6.tv_sec) * 1000.0 + (t7.tv_usec - t6.tv_usec) / 1000.0;
-
-  double const total_time = (t7.tv_sec - t1.tv_sec) * 1000.0 + (t7.tv_usec - t1.tv_usec) / 1000.0;
-
-  printf("IN: %3.2f, A4: %4.2f\tA1: %4.2f\tA2: %3.2f\tA3: %5.2f\tFLOW: %5.2f\tTOTAL: %5.2f\n", input_time, a4_time, a1_time, a2_time, a3_time, flow_time, total_time);
+  printf("IN: %4.2f, A1: %5.2f, A2: %5.2f, A3: %6.2f, A4: %3.2f, FLOW: %4.2f, TOTAL: %6.2f\n", input_time, a1_time, a2_time, a3_time, a4_time, flow_time, total_time);
 #endif
 
   return 0;

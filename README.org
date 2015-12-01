@@ -2,7 +2,7 @@
 #+OPTIONS: creator:nil d:(not "LOGBOOK") date:nil e:t email:nil f:t inline:t
 #+OPTIONS: num:t p:nil pri:nil prop:nil stat:t tags:t tasks:t tex:t timestamp:nil html-postamble:nil
 #+OPTIONS: title:t toc:t todo:t |:t
-#+TITLE: The Playground -- My Solution
+#+TITLE: The Playground -- My Optimized Solution
 #+DATE: <2015-11-29 Sun>
 #+AUTHOR: Andreas H. From
 #+LANGUAGE: en
@@ -10,15 +10,10 @@
 #+EXCLUDE_TAGS: noexport
 #+CREATOR: Emacs 24.5.1 (Org mode 8.3.2)
 
-#+BEGIN_SRC emacs-lisp :exports results :results value silent
-(setq org-confirm-babel-evaluate nil)
-(setq org-src-preserve-indentation t)
-#+END_SRC
-
 This is an informal description of my solution to an internal programming competition in my algorithms and data structures course.
 The competition has ended, but at the time of writing winners have not been announced.
 I hold second place based on test cases behind an implementation in Python, so this can't be optimal, but not that bad either.
-It turns out the first place, which deserves to win, has combined setting up the graph and running the flow algorithm.
+It turns out the first place, which deserves to win, combined setting up the graph and running the flow algorithm.
 This way the flow network is constructed lazily and a lot of the work I spend on setting up the expensive A3-activities is saved.
 
 The code is a single file and should built easily with both GCC and Clang, I use the following with varying degrees of optimization:
@@ -30,9 +25,8 @@ clang -g -O2 -Weverything -std=c11 playground.c -o playground
 Unfortunately GitHub doesn't support [[http://orgmode.org/][org]] files fully, so the references don't work.
 I hope the it's clear from context what is meant.
 
-After the contest deadline I've made some more optimizations.
-These will be described in italics or otherwise marked.
-Otherwise this is a description of the solution I handed in, corresponding to [[https://github.com/andreasfrom/theplayground/blob/f8ac9c765b7fea9edbe38cea9d75757ec9588160/playground.c][this commit]].
+[[https://github.com/andreasfrom/theplayground/tree/4f65b0a7427092997b9cae86aa2c68850bcea8b0][This commit]] describes the solution I handed in.
+In this past week since that, I've made some improvements; it is this improved solution that I will describe below as it also has the benefit of being clearer.
 
 * The Problem
 [[http://www2.compute.dtu.dk/courses/02110/ThePlayground.pdf][The original  problem statement is available online]], I will describe the problem here as well.
@@ -83,17 +77,25 @@ These are illustrated (without capacities) one by one on figures [[fig:a1]], [[f
 #+CAPTION: A1s (same horisontal or vertical line)
 [[./figures/a1.gif]]
 
+------------------------------------------------------------
+
 #+NAME: fig:a2
 #+CAPTION: A2s (furthest away)
 [[./figures/a2.gif]]
+
+------------------------------------------------------------
 
 #+NAME: fig:a3
 #+CAPTION: A3s (2 or more platforms in-between)
 [[./figures/a3.gif]]
 
+------------------------------------------------------------
+
 #+NAME: fig:a4
 #+CAPTION: A4s (end of fun)
 [[./figures/a4.gif]]
+
+------------------------------------------------------------
 
 #+NAME: fig:a1234
 #+CAPTION: All possible activities for the sample input
@@ -129,12 +131,14 @@ Notice how the original capacities can now be read off the edges instead of the 
 #+CAPTION: Our sample platforms with edge capacities
 [[./figures/edgecaps.gif]]
 
-The vertex numbering scheme is as follows:
-For a platform $i$, the four new vertices are named $i+x\cdot P$ where A$x$ is the matching activity and $P$ still the total number of platforms.
-So any A1 activities from the start-platform ($i=0$) in our example will now go from platform $0+1\cdot 8=8$ instead.
-Notice that this is colored red in figure [[fig:edgecaps]] as expected .
+It turns out that because only one A2- and A4-activity per platform can be constructed, the dummy vertices for these are redundant: There will just be one edge to it and one from it with the same capacity.
+Therefore we only inserts dummmys for A1 and A3 as in [[fig:edgecaps2]].
 
-/It turns out that because only one A2- and A4-activity per platform can be constructed, the dummy vertices for these are redundant, so my post-deadline solution only inserts ones for A1 and A3. The figures refer to my submitted solution./
+#+NAME: fig:edgecaps2
+#+CAPTION: Our sample platforms with only the needed edge capacities
+[[./figures/edgecaps2.gif]]
+
+The numbering scheme is that the A1-dummy for a platform $x$ will be numbered $x+P$ and the A3-dummy numbered $x+2\cdot P$.
 
 The final graph which we can run a standard flow algorithm on is given in figure [[fig:a1234all]].
 The original vertices are black, as are their edges to the new vertices.
@@ -146,9 +150,8 @@ Compare this to one of the first four graphs: All edges are still there, they ju
 [[./figures/a1234all.gif]]
 
 I'm using Edmonds-Karp to find the actual maximum flow, a possible solution with maximum flow 5 can be seen on figure [[fig:sol]].
-This doesn't use A2-activities at all, but is the one my implementation finds.
 One trail consists of going from 0 to 4 with an A3-activity, of which 2 can be built from 0, and then from 4 to 7 with an A4-activity.
-Another trail uses A1-activities to go from 0 to 1 to 7, and so on.
+Another trail uses A1-activities to go from 0 to 5 to 7, and so on.
 
 #+NAME: fig:sol
 #+CAPTION: One solution to the sample input
@@ -157,8 +160,38 @@ Another trail uses A1-activities to go from 0 to 1 to 7, and so on.
 *  Setting up the Graph
 Now we know how to model the problem as something we can solve with an off-the-shelf algorithm, so we just need to set up this flow network efficiently.
 
-I'll start with the most interesting activity, A3, as this will dictate how much effort we spend on the rest.
-I will describe constructing an activity between two platforms, so just remember that this actually means from the proper dummy vertex of the first platform, to the other platform as described in the previous section.
+I will simply discuss constructing an activity between two platforms, so just remember that this actually means from the proper dummy vertex of the first platform to the other platform as described in the previous section.
+
+** NEWS Slide (A1, red)
+We need to construct edges between all platforms sharing either an x- or y-coordinate.
+
+By sorting the platforms twice, by x- and y-coordinate separately, all platforms on the same vertical or horizontal line, respectively, will be placed next to each other.
+Then we can iterate through the array and construct the activities in $O(P^2)$ time worst-case, but $\Omega(P)$ in the best when no platforms share a coordinate (excluding the sorting).
+
+We can do this with the following algorithm assuming sorted platforms in the array ~ps~ with size ~P~.
+
+#+BEGIN_EXAMPLE
+for i = 0..P:
+    p = ps[i];
+    for j = i+1..P while ps[j].x == p.x:
+        insert edge from from p to ps[j] and from ps[j] to p
+#+END_EXAMPLE
+
+So first we sort by y and run the above for the vertical activities, then by x (with y breaking ties for later) and run the above for the horizontal ones.
+We sort twice, but need the sorted array for both A2- and A3-activities, so the work is well spent.
+We could use a hash map with direct addressing for a better best case, but that would involve allocating memory for all the platforms again.
+Quicksort sorts in-place, which I think is nicer.
+
+** Human Cannon (A2, blue)
+Because the platform furthest away from any other will always be part of the convex hull, it's enough to only check the platforms that are part of the convex hull as candidates for the A2-activity.
+This is faster since the amount of platforms in the convex hull is likely to be significantly smaller than $P$.
+Of course the worst case is still $O(P^2)$ if the platforms are all part of the convex hull.
+
+Constructing the convex hull can be done in linear time given sorted points and we can take advantage of this, because the points were sorted to solve A1-activities.
+
+Then for each platform we see which platform on the convex hull is furthest away and construct an A2-activity to that.
+
+As a detail $\sqrt{x}\gt \sqrt{y}$ implies $x\gt y$, so we can save the square root and compare manhattan instead of euclidean distances.
 
 ** Platform Trampoline (A3, green)
 The algorithm for constructing these activities is actually quite simple, but it took me a while to figure it out.
@@ -168,71 +201,43 @@ What we want to do is consider each platform in order.
 Then when considering a platform, we want to consider a different one and as efficiently as possible, determine whether it is legal to make an A3-activity between the two.
 
 The trick is to look at the platforms, not in the order they're given, but from left to right, and from the bottom up.
+The order we sorted them in previously.
 And furthermore to only look at platforms to the right and up, when already considering one.
 This guarantees that we look at platforms on the same line in order by their distance.
-That is, when multiple platforms lie on the same line given an origin, we will see the closest one first, then the second-closest etc.
+That is, when multiple platforms lie on the same line given an origin platform, we will see the closest one first, then the second-closest etc.
 
 The algorithm then becomes
 
-- Sort the platforms by x- then y-coordinate (left to right, bottom up)
+- (Sort the platforms by x- then y-coordinate (left to right, bottom up))
 - Initialize an empty hashtable
-- For each platform $p$
-  + For each platform $q$ ahead of $p$ in the sorted order
-    - Calculate the slope between $p$ and $q$
+- For each platform p
+  + For each platform q ahead of p in the sorted order
+    - Calculate the slope between p and q
     - Look up the slope in our hash table
-    - If the value associated with the slope is 2 (or more), draw an A3-activity from $p$ to $q$ and from $q$ to $p$
+    - If the value associated with the slope is 2 (or more), draw an A3-activity from $p$ to $q$ and from q to p
     - Otherwise, increase the count
   + Clear the hash table
 
-We have to draw the activity in both directions because we only look ahead in the sorted order.
+We have to construct the activity in both directions because we only look ahead in the sorted order.
 
 Looking at figure [[fig:slopes]], the count associated with each slope is noted next to its blue line.
 Platforms are marked red when visited but no activity is built and green when one is.
-We see that the only platform to which an A3-activity can be built from 0 is number 4 as expected.
+We see that the only platform to which an A3-activity can be built from 0 is 4 as expected.
 
 #+NAME: fig:slopes
 #+CAPTION: Partial run of algorithm for determining valid A3-activities
 [[./figures/slopes/slopes.gif]]
 
-
-With expected constant time lookup in the hash table, the above runs in $O(P^2)$ time.
+With expected constant time lookup in the hash table, this runs in $\Theta(P^2)$ time.
 That's the best upper bound we can hope for, as there might be upwards of $P^2$ legal A3-activities; consider the case where all platforms lie on a single line.
 Unfortunately this is also the lower bound of the algorithm: we always spend $O(P^2)$ time, even if no A3-activities can be constructed.
-I would love to solve this with a lower bound of $\Omega(P\log P)$ or something instead.
+I would love to solve this with a lower bound of $\Omega(P\log P)$ or something instead, but can't figure out how.
 
-** NEWS Slide (A1, red)
-We have already committed to checking every platform from every other, so this one is simple: simply see if the x- or y-coordinates match and construct the activity in both directions, because we only look ahead.
-In the implementation I make the equivalent check if either $\Delta x$ or $\Delta y$ is 0, because it seemed a bit faster.
-
-This, as above, runs in $\Theta(P^2)$ time.
-By sorting the platforms by x- and y-coordinate separately, all platforms on vertical and horizontal lines, respectively, would be next to each other.
-Then one could iterate through the array and construct the activities in $O(P^2)$ time worst-case, but $\Omega(P)$ in the best (excluding the sorting).
-
-/I tried this method using sorting and it makes it faster because of the better lower bound./
-
-** Human Cannon (A2, blue)
-This becomes slightly more complicated because we only look ahead.
-
-I maintain two arrays of length $P$ of platforms and distances respectively.
-These are indexed by platform number, so the platform furthest away from platform $x$ encountered so far is found at index $x$ in the first array and the distance in the second.
-Then every time we calculate the distance between two platforms, look up both platforms in the arrays and see if one needs updating.
-When finished with a platform, draw the activity to the platform in the array.
-
-The arrays are needed to solve the following problem:
-Consider platform 5 in figure [[fig:a2]].
-From 5 we will only look at platforms 7 and 6 because we look ahead, so at platform 0 we need to have remembered that 0 is furthest away so far.
-
-Because $\sqrt{x}\gt \sqrt{y}$ implies $x\gt y$, I save the square root and compare manhattan distances instead of euclidean.
-
-Again I have chosen the straight-forward $\Theta(P^2)$ solution, because the A3-activities dominate regardless, but this is actually solvable in $O(P\log P)$ time.
-See [[http://www.researchgate.net/publication/220115912_An_O%28n_log_n%29_algorithm_for_the_all-farthest-segments_problem_for_a_planar_set_of_points][An O(n log n) algorithm for the all-farthest-segments problem for a planar set of points]].
-
-If I could construct the A3-activities faster, these optimizations would be worth doing.
-
-/Because the platform furthest away will always be part of the convex hull, it's enough to only check that for each platform. This is faster since the amount of platforms in the convex hull is likely to be significantly smaller than $P$. Of course the worst case is still $O(P^2)$ if the platforms are all part of the convex hull./
+This is where my competitors method of constructing these lazily really matters.
 
 ** EOF Wormhole (A4, orange)
 Here we just construct an A4-activity from each platform to the last one.
+Also we insert the dummy vertices while we're iterating through the platforms anyway.
 
 This of course takes linear time in the number of platforms.
 
@@ -240,12 +245,10 @@ This of course takes linear time in the number of platforms.
 After setting up the graph as described above, it really is just a matter of running Edmonds-Karp or another maximum flow algorithm.
 I won't go into details with that, instead I have annotated the source code below, so the above discussion becomes a bit more concrete.
 
-I've chosen to include the entirety of the code, just under 500 lines, so feel free to skip a section or two.
-The code is almost exactly equal to the one I submitted to the competition, only small non-functional edits have been made.
+I've chosen to include the entirety of the code, just under 600 lines, so feel free to skip a section or two.
 
-The indentation should be correct even though the code has been split up by my commentary, so I hope it's readable.
-
-Consider looking at the /Optimized Code/-section instead of /Main/ first as the code is faster and should be easier to understand.
+Because the code has been split up by my commentary, the indentation is somewhat lost; I hope it's readable regardless.
+If not, the entire source file is included with the repository.
 
 ** Includes
 CodeJudge is the online system used, among other things, to test the submissions.
@@ -276,10 +279,15 @@ This checking should really be more robust (ie. using ~__APPLE__~) but it doesn'
 
 The definitions are, in order: the maximum number of characters on a given line of input rounded to a nice number, when to switch from quicksort to insertion sort, and how many vertices are in the flow network per platform (see above).
 
+Finally there's a macro for calculating the difference in milliseconds between  two ~timeval~ s.
+This is used for timing different parts of the code.
+
 #+BEGIN_SRC c
 #define MAX_LINE 42
 #define SORT_CUTOFF 16
-#define VERTEX_FACTOR 5
+#define VERTEX_FACTOR 3
+
+#define MS(S, T) (T.tv_sec - S.tv_sec) * 1000.0 + (T.tv_usec - S.tv_usec) / 1000.0
 #+END_SRC
 
 ** Structs
@@ -341,10 +349,15 @@ That way, I opt in to mutation and get an error if I change anything accidentall
 The ~_alloc~ functions ended up taking pointers to pre-allocated memory instead of allocating themselves.
 This makes it easier to control the allocation and I get to share some of it between the graph setup and flow algorithm, but makes the name a bit odd.
 
+~LESS~ is an abbreviation for a pointer to a function comparing two platforms and specifying which should come first in the sorted order.
+Quicksort and insertion sort take this as a parameter, so we can sort by both x and y with the same function definitions.
+
 #+BEGIN_SRC c
 /*
  * PROTOTYPES
  */
+
+typedef bool (*LESS)(Platform, Platform);
 
 Graph graph_alloc(Vertex * const vertices, size_t const V);
 void graph_free(Graph * const G);
@@ -362,18 +375,23 @@ uint32_t max(uint32_t const a, uint32_t const b);
 void insert_flow_edge(Graph * const  G, uint32_t const from, uint32_t const, uint32_t const capacity);
 uint32_t edmonds_karp(Graph * const G, uint32_t const source, uint32_t const sink, uint32_t * const queue_data, uint8_t * const marked, uint32_t * const caps);
 
+bool lessxy(Platform const a, Platform const b);
+bool lessy(Platform const a, Platform const b);
 void swap_platform(Platform * const a, Platform * const b);
-void quicksort(Platform * const xs, int const lo, int const hi);
-int partition(Platform * const xs, int const lo, int const hi);
-bool less(Platform const a, Platform const b);
-void insertion_sort(Platform * const xs, size_t const len);
+void quicksort(Platform * const xs, int const lo, int const hi, LESS less);
+int partition(Platform * const xs, int const lo, int const hi, LESS less);
+void insertion_sort(Platform * const xs, size_t const len, LESS less);
+void sort(Platform * const ps, size_t const P, LESS less);
 
 uint32_t next_prime(uint32_t const a);
 bool update_slope_count(uint32_t * const slopes, uint8_t * const counts, uint32_t const slopes_len, uint32_t const key);
+
+int ccw(Platform * p1, Platform * p2, Platform * p3);
+void convex_hull(Platform * points, size_t npoints, Platform ** const out_hull, size_t * out_hullsize);
 #+END_SRC
 
 ** Graph
-The initial capacity for the adjacency tables is 64.
+The initial capacity for the adjacency tables is 32.
 This is found experimentally to be the fastest and doesn't seem excessive in terms of memory use.
 
 Inserting an edge is really easy with ~realloc~, insert it, check if the size is equal to the capacity and if so double the capacity and reallocate.
@@ -385,8 +403,8 @@ Inserting an edge is really easy with ~realloc~, insert it, check if the size is
 
 Graph graph_alloc(Vertex * const vertices, size_t const V) {
   for (size_t i = 0; i < V; i++) {
-    Edge * const edge_list = malloc(64 * sizeof *edge_list);
-    vertices[i] = (Vertex) {.edge_list = edge_list, .size = 0, .capacity = 64, .parent_edge = NULL};
+    Edge * const edge_list = malloc(32 * sizeof *edge_list);
+    vertices[i] = (Vertex) {.edge_list = edge_list, .size = 0, .capacity = 32, .parent_edge = NULL};
   }
 
   return (Graph) {.vertices = vertices, .size = V};
@@ -413,7 +431,7 @@ void insert_edge(Graph * const G, uint32_t const from, uint32_t const to, uint32
 
 ** Queue
 This queue is taken straight from CLRS.
-It's used for the breadth-first search in Edmonds-Karp where we know the upper bound, $5P$, of vertices enqueued and we know this doesn't get too large.
+It's used for the breadth-first search in Edmonds-Karp where we know the upper bound, 3P, of vertices enqueued and we know this doesn't get too large.
 So we just pre-allocate a big enough chunk of memory and keep two indices into it: one for the head and one for the tail.
 Enqueuing and dequeuing is just a read/write and a modulo operation and more importantly, we can clear the queue in constant time by just setting these to 0.
 
@@ -556,7 +574,6 @@ Another little helper for adding edges in both directions and avoiding adding us
 #+BEGIN_SRC c
 void insert_flow_edge(Graph * const  G, uint32_t const from, uint32_t const to, uint32_t const capacity) {
   assert(G != NULL);
-  assert(from != to);
 
   if (capacity == 0) return;
 
@@ -574,6 +591,8 @@ The asymptotic running time is the same, but because insertion sort has lower co
 I'm using the Hoare partitioning scheme as described by [[http://algs4.cs.princeton.edu/23quicksort/][Sedgewick and Wayne]].
 The code is almost an exact replica of [[http://algs4.cs.princeton.edu/23quicksort/Quick.java.html][their implementation in Java]].
 
+We see how nicely the function pointer works.
+
 #+BEGIN_SRC c
 /*
  * SORTING
@@ -581,15 +600,19 @@ The code is almost an exact replica of [[http://algs4.cs.princeton.edu/23quickso
 
 void swap_platform(Platform * a, Platform * b) {
   Platform const t = *a;
-  ,*a = *b;
-  ,*b = t;
+  *a = *b;
+  *b = t;
 }
 
-bool less(Platform const a, Platform const b) {
+bool lessxy(Platform const a, Platform const b) {
   return a.x < b.x || (a.x == b.x && a.y < b.y);
 }
 
-int partition(Platform * const xs, int const lo, int const hi) {
+bool lessy(Platform const a, Platform const b) {
+  return a.y < b.y;
+}
+
+int partition(Platform * const xs, int const lo, int const hi, LESS less) {
   int const idx = rand() % (hi-lo+1) + lo;
   swap_platform(xs+idx, xs+lo);
 
@@ -614,15 +637,15 @@ int partition(Platform * const xs, int const lo, int const hi) {
   return j;
 }
 
-void quicksort(Platform * const xs, int const lo, int const hi) {
+void quicksort(Platform * const xs, int const lo, int const hi, LESS less) {
   if (hi - lo > SORT_CUTOFF) {
-    int const p = partition(xs, lo, hi);
-    quicksort(xs, lo, p-1);
-    quicksort(xs, p+1, hi);
+    int const p = partition(xs, lo, hi, less);
+    quicksort(xs, lo, p-1, less);
+    quicksort(xs, p+1, hi, less);
   }
 }
 
-void insertion_sort(Platform * const xs, size_t const len) {
+void insertion_sort(Platform * const xs, size_t const len, LESS less) {
   for (size_t i = 1; i < len; i++) {
     Platform x = xs[i];
     size_t j = i;
@@ -634,6 +657,11 @@ void insertion_sort(Platform * const xs, size_t const len) {
 
     xs[j] = x;
   }
+}
+
+void sort(Platform * const ps, size_t const P, LESS less) {
+  quicksort(ps, 0, (int) P-1, less);
+  insertion_sort(ps, P, less);
 }
 #+END_SRC
 
@@ -692,214 +720,16 @@ Because we're hashing so much, it's worth spending a tiny amount of time finding
   }
 #+END_SRC
 
-** Main
-Finally the main function.
-There's some benchmarking stuff in there behind the ~ifndef~.
-
-The random number generator is seeded for the quicksort, which uses a random pivot.
-
-Then I do all the allocation aside from the adjacency lists up front.
-
-#+BEGIN_SRC c
-/*
- * MAIN
- */
-
-int main() {
-#ifndef CODEJUDGE
-  struct timeval t1, t2, t3, t4, t5;
-  gettimeofday(&t1, NULL);
-#endif
-
-  srand((unsigned int) time(NULL));
-
-  uint32_t P;
-  char line[MAX_LINE];
-
-  fgets(line, MAX_LINE, stdin);
-  sscanf(line, "%d", &P);
-
-  uint32_t const n_slopes = next_prime(VERTEX_FACTOR*P);
-
-  Platform * const ps = malloc(P * sizeof *ps);
-  uint32_t * const furthest = calloc(P, sizeof *furthest);
-  int64_t * const furthest_dist = calloc(P, sizeof *furthest_dist);
-  Vertex * const vertices = malloc(VERTEX_FACTOR*P * sizeof *vertices);
-  uint32_t * const slopes = malloc(n_slopes * sizeof *slopes);
-  uint8_t * const counts = calloc(n_slopes, sizeof *counts);
-  uint32_t * const caps = malloc(VERTEX_FACTOR*P * sizeof *caps);
-
-  Graph G = graph_alloc(vertices, VERTEX_FACTOR*P);
-#+END_SRC
-
-Read in the input.
-
-#+BEGIN_SRC c
-  for (uint32_t i = 0; i < P; i++) {
-    fgets(line, MAX_LINE, stdin);
-    sscanf(line, "%d %d %u %u %u %u", &ps[i].x, &ps[i].y, &ps[i].a1, &ps[i].a2, &ps[i].a3, &ps[i].a4);
-    ps[i].n = i;
-  }
-
-#ifndef CODEJUDGE
-  gettimeofday(&t2, NULL);
-#endif
-
-#+END_SRC
-
-I love the next two lines.
-It's like we really want to make sure the platforms are sorted...
-This is of course because the quicksort cuts off when reaching buckets of size 16 and leaves these to be sorted by the insertion sort.
-It looks redundant, but certainly isn't!
-
-#+BEGIN_SRC c
-  quicksort(ps, 0, (int) P-1);
-  insertion_sort(ps, P);
-
-#ifndef CODEJUDGE
-  gettimeofday(&t3, NULL);
-#endif
-#+END_SRC
-
-Here's the main loop.
-First the edges for converting from vertex to edge capacities are inserted according to the schema, and the trivial A4-activities are constructed.
-
-#+BEGIN_SRC c
-  /* Vertex schema:
-   * i: ingoing (original vertex)
-   * i+1*P: A1
-   * i+2*P: A2
-   * i+3*P: A3
-   * i+4*P: A4
-   */
-
-  for (uint32_t i = 0; i < P; i++) {
-    Platform const p = ps[i];
-
-    // Vertex -> edge capacities
-    insert_flow_edge(&G, p.n, p.n+1*P, p.a1);
-    insert_flow_edge(&G, p.n, p.n+2*P, p.a2);
-    insert_flow_edge(&G, p.n, p.n+3*P, p.a3);
-    insert_flow_edge(&G, p.n, p.n+4*P, p.a4);
-
-    // A4 (EOF)
-    insert_flow_edge(&G, p.n+4*P, P-1, p.a4);
-#+END_SRC
-
-Then the inner loop, that looks only at platforms to the left of and above ~p~.
-$\Delta x$ and $\Delta y$ are calculated for the slope and used to construct A1-activities as well.
-
-#+BEGIN_SRC c
-    for (uint32_t j = i+1; j < P; j++) {
-      Platform const q = ps[j];
-
-      int64_t const dx = p.x - q.x;
-      int64_t const dy = p.y - q.y;
-
-      // A1 (NEWS)
-      if (!dx || !dy) {
-        insert_flow_edge(&G, p.n+P, q.n, p.a1);
-        insert_flow_edge(&G, q.n+P, p.n, q.a1);
-      }
-#+END_SRC
-
-I was very curious how to hash floating point values, but simply copying the bits verbatim into an (then arbitrary) unsigned integer works really well.
-I use this as the key also instead of the float, because they are identical anyway and this avoids a warning about unsafe comparison of floating point values.
-
-#+BEGIN_SRC c
-      // A3 (Platform Trampoline)
-      float const fslope = (float) dy / dx;
-      uint32_t slope;
-      memcpy(&slope, &fslope, sizeof slope);
-      if (update_slope_count(slopes, counts, n_slopes, slope)) {
-        insert_flow_edge(&G, p.n+3*P, q.n, p.a3);
-        insert_flow_edge(&G, q.n+3*P, p.n, q.a3);
-      }
-#+END_SRC
-
-Then check if either ~p~ or ~q~ is the new platform furthest away from the other, and construct the A2-activity when the loop exits.
-
-Finally clear the counts for the hash table.
-This is enough, we don't have to clear ~slopes~ as well, so we save a constant factor because the ~uint8_t~ array takes up a quarter of the space of ~slopes~.
-
-#+BEGIN_SRC c
-      int64_t const dist = dx*dx + dy*dy;
-      if (dist > furthest_dist[p.n] || (dist == furthest_dist[p.n] && q.n < furthest[p.n])) {
-        furthest[p.n] = q.n;
-        furthest_dist[p.n] = dist;
-      }
-
-      if (dist > furthest_dist[q.n] || (dist == furthest_dist[q.n] && p.n < furthest[q.n])) {
-        furthest[q.n] = p.n;
-        furthest_dist[q.n] = dist;
-      }
-    }
-
-    // A2 (Human Cannon)
-    insert_flow_edge(&G, p.n+2*P, furthest[p.n], p.a2);
-
-    memset(counts, 0, n_slopes * sizeof *counts);
-  }
-
-#ifndef CODEJUDGE
-  gettimeofday(&t4, NULL);
-#endif
-#+END_SRC
-
-Run the flow algorithm, print the result and free the memory.
-Freeing the adjacency tables takes too long because we need to iterate over all the vertices, so I only do that locally.
-
-In the end I print some running times for testing.
-
-#+BEGIN_SRC c
-  uint32_t const flow = edmonds_karp(&G, 0, P-1, slopes, counts, caps);
-  printf("%u\n", flow);
-
-  free(ps);
-  free(furthest);
-  free(furthest_dist);
-  free(slopes);
-  free(counts);
-  free(caps);
-  free(vertices);
-
-#ifndef CODEJUDGE
-  gettimeofday(&t5, NULL);
-
-  graph_free(&G);
-
-  double const input_time = (t2.tv_sec - t1.tv_sec) * 1000.0 + (t2.tv_usec - t1.tv_usec) / 1000.0;
-
-  double const sort_time = (t3.tv_sec - t2.tv_sec) * 1000.0 + (t3.tv_usec - t2.tv_usec) / 1000.0;
-
-  double const setup_time = (t4.tv_sec - t3.tv_sec) * 1000.0 + (t4.tv_usec - t3.tv_usec) / 1000.0;
-
-  double const flow_time = (t5.tv_sec - t4.tv_sec) * 1000.0 + (t5.tv_usec - t4.tv_usec) / 1000.0;
-
-  double const total_time = (t5.tv_sec - t1.tv_sec) * 1000.0 + (t5.tv_usec - t1.tv_usec) / 1000.0;
-
-  printf("INPUT: %6.2f\tSORT: %6.2f\tSETUP: %6.2f\tFLOW: %6.2f\tTOTAL: %6.2f\n", input_time, sort_time, setup_time, flow_time, total_time);
-#endif
-
-  return 0;
-}
-#+END_SRC
-
-And we're done.
-
-
-** Optimized code
-
-*** Convex Hull
+** Convex Hull
 Create the convex hull in linear time given sorted input by finding upper and lower hulls.
-This is very nice since I already sort the input to do the A1-activities so constructing this is cheap.
+This is very nice since we already sort the input to do the A1-activities so constructing this is cheap as described.
 
 #+BEGIN_SRC c
 /*
  * CONVEX HULL
  */
 
-double ccw(Platform * p1, Platform * p2, Platform * p3) {
+int ccw(Platform * p1, Platform * p2, Platform * p3) {
   return (p2->x - p1->x)*(p3->y - p1->y) - (p2->y - p1->y)*(p3->x - p1->x);
 }
 
@@ -923,41 +753,76 @@ void convex_hull(Platform * points, size_t npoints, Platform ** const out_hull, 
   *out_hull = hull;
   *out_hullsize = k;
 }
-#+END_SRC c
-
-*** New Setup in Main
-We need a new array for the convex hull, but the ~furthest~ and ~furthest_dist~ arrays are gone, so this is actually better memory-wise also.
-
-#+BEGIN_SRC c
-Platform * hull = malloc((P+1) * sizeof *hull);
 #+END_SRC
 
-**** A4
-Inserting the two dummy vertices we need and the A4-activities is just a matter of running through the platforms.
+** Main
+Finally the main function.
+There's some benchmarking stuff in there behind the ~ifndef~.
+
+The random number generator is seeded for the quicksort, which uses a random pivot.
+
+Then I do all the allocation aside from the adjacency lists up front.
+
+#+BEGIN_SRC c
+/*
+ * MAIN
+ */
+
+int main() {
+#ifndef CODEJUDGE
+  struct timeval t1, t2, t3, t4, t5, t6, t7;
+  gettimeofday(&t1, NULL);
+#endif
+
+  srand((unsigned int) time(NULL));
+
+  uint32_t P;
+  char line[MAX_LINE];
+
+  fgets(line, MAX_LINE, stdin);
+  sscanf(line, "%d", &P);
+
+  uint32_t const n_slopes = next_prime(5*P);
+
+  Platform * const ps = malloc(P * sizeof *ps);
+  Vertex * const vertices = malloc(VERTEX_FACTOR*P * sizeof *vertices);
+  uint32_t * const slopes = malloc(n_slopes * sizeof *slopes);
+  uint8_t * const counts = calloc(n_slopes, sizeof *counts);
+  uint32_t * const caps = malloc(VERTEX_FACTOR*P * sizeof *caps);
+  Platform * hull = malloc((P+1) * sizeof *hull);
+
+  Graph G = graph_alloc(vertices, VERTEX_FACTOR*P);
+#+END_SRC
+
+Read in the input.
 
 #+BEGIN_SRC c
   for (uint32_t i = 0; i < P; i++) {
-    Platform const p = ps[i];
+    fgets(line, MAX_LINE, stdin);
+    sscanf(line, "%d %d %u %u %u %u", &ps[i].x, &ps[i].y, &ps[i].a1, &ps[i].a2, &ps[i].a3, &ps[i].a4);
+    ps[i].n = i;
+  }
 
-    // Vertex -> edge capacities
-    insert_flow_edge(&G, p.n, p.n+1*P, p.a1);
-    insert_flow_edge(&G, p.n, p.n+3*P, p.a3);
-
-    // A4 (EOF)
-    insert_flow_edge(&G, p.n, P-1, p.a4);
-   }
+#ifndef CODEJUDGE
+  gettimeofday(&t2, NULL);
+#endif
 #+END_SRC
 
-**** A1
-I've expanded the sorting functions to take a comparator as argument, see playground.c in this repo for details, so we can easily sort first by y-coordinate, then x, with y for breaking ties.
-
-By sorting by y, all platforms on the same vertical line will be put next to each other.
-Then for each platform, we can run forward in the array and while the coordinate matches construct an activity between the two.
-
-We sort by x,y last, so the input is sorted for constructing the convex hull and A3-activities.
+Construct the A1-activities as described: Sort the platforms so candidates are next to each other and then run through and construct them as long as the coordinates match.
 
 #+BEGIN_SRC c
-  // A1 (NEWS)
+  /* Vertex schema:
+   * i: ingoing (original vertex)
+   * i+1*P: A1
+   * i+2*P: A3
+   * There can only be one of each of A2 and A4,
+   * so we don't need the dummy vertices for these
+   */
+
+  /*
+   * A1 (NEWS)
+   */
+
   sort(ps, P, lessy);
 
   for (size_t i = 0; i < P; i++) {
@@ -966,7 +831,7 @@ We sort by x,y last, so the input is sorted for constructing the convex hull and
       insert_flow_edge(&G, p.n+P, ps[j].n, p.a1);
       insert_flow_edge(&G, ps[j].n+P, p.n, ps[j].a1);
     }
-  }
+   }
 
   sort(ps, P, lessxy);
 
@@ -976,15 +841,19 @@ We sort by x,y last, so the input is sorted for constructing the convex hull and
       insert_flow_edge(&G, p.n+P, ps[j].n, p.a1);
       insert_flow_edge(&G, ps[j].n+P, p.n, ps[j].a1);
     }
-  }
+   }
+
+#ifndef CODEJUDGE
+  gettimeofday(&t3, NULL);
+#endif
 #+END_SRC
 
-**** A2
-The idea here is straight-forward.
-From any platform, the platform furthest away must be on the convex hull, so only look at these.
+Now the platforms are sorted so we can create the convex hull and use this for constructing A2-activities to the platforms furthest away.
 
 #+BEGIN_SRC c
-  // A2 (Human Cannon)
+  /*
+   * A2 (Human Cannon)
+   */
 
   size_t hull_size;
   convex_hull(ps, P, &hull, &hull_size);
@@ -1008,14 +877,24 @@ From any platform, the platform furthest away must be on the convex hull, so onl
     }
 
     insert_flow_edge(&G, p.n, furthest, p.a2);
-  }
+   }
+
+#ifndef CODEJUDGE
+  gettimeofday(&t4, NULL);
+#endif
 #+END_SRC
 
-**** A3
-The A3-solution is the same as previously, but easier to understand because the rest of the activities are constructed separately.
+I was very curious how to hash floating point values, but simply copying the bits verbatim into an unsigned integer works really well.
+I use this as the key also instead of the float, because they are identical anyway and this avoids a warning about unsafe comparison of floating point values.
+
+Two arrays comprise the hash table, the slopes/keys and counts/values and it is enough to clear the counts to clear the hash table as I've implemented it.
+This saves a constant factor because the byte array of counts takes up a quarter of the space of the 4 byte slopes.
 
 #+BEGIN_SRC c
-  // A3 (Platform Trampoline)
+  /*
+   * A3 (Platform Trampoline)
+   */
+
   for (uint32_t i = 0; i < P; i++) {
     Platform const p = ps[i];
     if (p.a3 == 0) continue;
@@ -1024,24 +903,86 @@ The A3-solution is the same as previously, but easier to understand because the 
       Platform const q = ps[j];
 
       int64_t const dx = p.x - q.x, dy = p.y - q.y;
-
       float const fslope = (float) dy / dx;
       uint32_t slope;
       memcpy(&slope, &fslope, sizeof slope);
-      if (update_slope_count(slopes, counts, n_slopes, slope)) {
-        insert_flow_edge(&G, p.n+3*P, q.n, p.a3);
-        insert_flow_edge(&G, q.n+3*P, p.n, q.a3);
-      }
 
+      if (update_slope_count(slopes, counts, n_slopes, slope)) {
+        insert_flow_edge(&G, p.n+2*P, q.n, p.a3);
+        insert_flow_edge(&G, q.n+2*P, p.n, q.a3);
+      }
     }
 
     memset(counts, 0, n_slopes * sizeof *counts);
-  }
+   }
 #+END_SRC
 
-* Sample running times
+Finally the simplest of activities; so simple that we can easily manage to connect the dummy vertices as well.
 
-** Original
+#+BEGIN_SRC c
+  /*
+   * A4 (EOF)
+   * vertex -> edge capacities
+   */
+
+  for (uint32_t i = 0; i < P; i++) {
+    Platform const p = ps[i];
+
+    insert_flow_edge(&G, p.n, p.n+  P, p.a1);
+    insert_flow_edge(&G, p.n, p.n+2*P, p.a3);
+
+    insert_flow_edge(&G, p.n, P-1, p.a4);
+  }
+
+#ifndef CODEJUDGE
+  gettimeofday(&t6, NULL);
+#endif
+#+END_SRC
+
+Run the flow algorithm, print the result and free the memory.
+Freeing the adjacency tables takes too long because we need to iterate over all the vertices, so I only do that locally.
+
+In the end I print some running times for testing.
+
+#+BEGIN_SRC c
+  /*
+   * FLOW
+   */
+
+  uint32_t const flow = edmonds_karp(&G, 0, P-1, slopes, counts, caps);
+  printf("%u\n", flow);
+
+  free(ps);
+  free(slopes);
+  free(counts);
+  free(caps);
+  free(hull);
+
+#ifndef CODEJUDGE
+  gettimeofday(&t7, NULL);
+
+  graph_free(&G);
+  free(vertices);
+
+  double const
+    input_time = MS(t1, t2),
+    a1_time = MS(t2, t3),
+    a2_time = MS(t3, t4),
+    a3_time = MS(t4, t5),
+    a4_time = MS(t5, t6),
+    flow_time = MS(t6, t7),
+    total_time = MS(t1, t7);
+
+  printf("IN: %4.2f, A1: %5.2f, A2: %5.2f, A3: %6.2f, A4: %3.2f, FLOW: %4.2f, TOTAL: %6.2f\n", input_time, a1_time, a2_time, a3_time, a4_time, flow_time, total_time);
+#endif
+
+  return 0;
+}
+#+END_SRC
+
+And we're done.
+
+* Sample running times
 I've included the input size (in parenthesis) and running times for the largest input given, in table [[tab:times]], generated by the implementation.
 The time taken to solve different inputs of the same size can vary greatly based on how many platforms are on line, their capacities etc.
 This is just to get an idea about where the time is spent.
@@ -1050,35 +991,19 @@ This is just to get an idea about where the time is spent.
 #+CAPTION: Running times for the largest inputs in milliseconds
 #+BEGIN_SRC text
 2680 (2000)
-INPUT:   2.75	SORT:   0.16	SETUP:  74.03	FLOW:   1.88	TOTAL:  78.82
+IN: 1.74, A1:  6.17, A2:  0.28, A3:  48.77, A4: 0.38, FLOW: 0.26, TOTAL:  57.60
 7632 (4000)
-INPUT:   3.50	SORT:   0.46	SETUP: 290.53	FLOW:  21.29	TOTAL: 315.78
+IN: 2.88, A1: 32.82, A2:  0.40, A3: 252.31, A4: 1.01, FLOW: 0.72, TOTAL: 290.14
 199880 (5000)
-INPUT:   6.20	SORT:   0.50	SETUP: 208.31	FLOW:   0.26	TOTAL: 215.27
+IN: 5.80, A1:  6.22, A2:  0.61, A3: 135.04, A4: 0.94, FLOW: 0.19, TOTAL: 148.80
 2420 (6000)
-INPUT:   8.26	SORT:   0.46	SETUP: 227.51	FLOW:   0.07	TOTAL: 236.30
+IN: 4.91, A1:  3.30, A2:  1.30, A3: 167.06, A4: 2.39, FLOW: 0.06, TOTAL: 179.02
 70404 (8000)
-INPUT:   9.81	SORT:   0.70	SETUP: 458.47	FLOW:   0.30	TOTAL: 469.28
+IN: 6.50, A1:  8.21, A2:  0.74, A3: 339.12, A4: 2.34, FLOW: 0.13, TOTAL: 357.03
+
 #+END_SRC
 
-Setup dominates greatly.
-
-** Post-deadline optimizations
-The optimizations described above in italics shaved off a good amount of milliseconds.
-This is still worse than the first place's method of constructing the activities lazily, but not by much because C is so much faster than Python.
-
-#+BEGIN_EXAMPLE
-2680 (2000)
-IN: 1.74, A4: 1.33	A1: 4.90	A2: 0.22	A3: 49.29	FLOW:  0.19	TOTAL: 57.67
-7632 (4000)
-IN: 3.41, A4: 2.63	A1: 27.48	A2: 1.19	A3: 261.92	FLOW:  0.45	TOTAL: 297.08
-199880 (5000)
-IN: 6.87, A4: 3.51	A1: 2.73	A2: 0.46	A3: 128.59	FLOW:  0.14	TOTAL: 142.30
-2420 (6000)
-IN: 5.76, A4: 4.00	A1: 1.97	A2: 0.74	A3: 168.46	FLOW:  0.05	TOTAL: 181.00
-70404 (8000)
-IN: 7.80, A4: 5.63	A1: 5.17	A2: 0.70	A3: 357.18	FLOW:  0.13	TOTAL: 376.62
-#+END_EXAMPLE
+A3 dominates greatly.
 
 * License
 Copyright © 2015 Andreas H. From
