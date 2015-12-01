@@ -18,6 +18,8 @@
 This is an informal description of my solution to an internal programming competition in my algorithms and data structures course.
 The competition has ended, but at the time of writing winners have not been announced.
 I hold second place based on test cases behind an implementation in Python, so this can't be optimal, but not that bad either.
+It turns out the first place, which deserves to win, has combined setting up the graph and running the flow algorithm.
+This way the flow network is constructed lazily and a lot of the work I spend on setting up the expensive A3-activities is saved.
 
 The code is a single file and should built easily with both GCC and Clang, I use the following with varying degrees of optimization:
 
@@ -27,6 +29,10 @@ clang -g -O2 -Weverything -std=c11 playground.c -o playground
 
 Unfortunately GitHub doesn't support [[http://orgmode.org/][org]] files fully, so the references don't work.
 I hope the it's clear from context what is meant.
+
+After the context deadline I've made some more optimizations.
+These will be described in italics or otherwise marked.
+Otherwise this is a description of the solution I handed in, corresponding to [[https://github.com/andreasfrom/theplayground/blob/f8ac9c765b7fea9edbe38cea9d75757ec9588160/playground.c][this commit]].
 
 * The Problem
 [[http://www2.compute.dtu.dk/courses/02110/ThePlayground.pdf][The original  problem statement is available online]], I will describe the problem here as well.
@@ -128,6 +134,8 @@ For a platform $i$, the four new vertices are named $i+x\cdot P$ where A$x$ is t
 So any A1 activities from the start-platform ($i=0$) in our example will now go from platform $0+1\cdot 8=8$ instead.
 Notice that this is colored red in figure [[fig:edgecaps]] as expected .
 
+/It turns out that because only one A2- and A4-activity per platform can be constructed, the dummy vertices for these are redundant, so my post-deadline solution only inserts ones for A1 and A3. The figures refer to my submitted solution./
+
 The final graph which we can run a standard flow algorithm on is given in figure [[fig:a1234all]].
 The original vertices are black, as are their edges to the new vertices.
 The new vertices are colored by the activity whose capacity they match.
@@ -198,7 +206,9 @@ In the implementation I make the equivalent check if either $\Delta x$ or $\Delt
 
 This, as above, runs in $\Theta(P^2)$ time.
 By sorting the platforms by x- and y-coordinate separately, all platforms on vertical and horizontal lines, respectively, would be next to each other.
-Then one could iterate through the array and construct the activities in $O(P^2)$ time worst-case, but $\Omega(P\log P)$ in the best.
+Then one could iterate through the array and construct the activities in $O(P^2)$ time worst-case, but $\Omega(P)$ in the best (excluding the sorting).
+
+/I tried this method using sorting and it makes it faster because of the better lower bound./
 
 ** Human Cannon (A2, blue)
 This becomes slightly more complicated because we only look ahead.
@@ -219,6 +229,8 @@ See [[http://www.researchgate.net/publication/220115912_An_O%28n_log_n%29_algori
 
 If I could construct the A3-activities faster, these optimizations would be worth doing.
 
+/Because the platform furthest away will always be part of the convex hull, it's enough to only check that for each platform. This is faster since the amount of platforms in the convex hull is likely to be significantly smaller than $P$. Of course the worst case is still $O(P^2)$ if the platforms are all part of the convex hull./
+
 ** EOF Wormhole (A4, orange)
 Here we just construct an A4-activity from each platform to the last one.
 
@@ -232,6 +244,8 @@ I've chosen to include the entirety of the code, just under 500 lines, so feel f
 The code is almost exactly equal to the one I submitted to the competition, only small non-functional edits have been made.
 
 The indentation should be correct even though the code has been split up by my commentary, so I hope it's readable.
+
+Consider looking at the /Optimized Code/-section instead of /Main/ first as the code is faster and should be easier to understand.
 
 ** Includes
 CodeJudge is the online system used, among other things, to test the submissions.
@@ -873,7 +887,161 @@ In the end I print some running times for testing.
 
 And we're done.
 
+
+** Optimized code
+
+*** Convex Hull
+Create the convex hull in linear time given sorted input by finding upper and lower hulls.
+This is very nice since I already sort the input to do the A1-activities so constructing this is cheap.
+
+#+BEGIN_SRC c
+/*
+ * CONVEX HULL
+ */
+
+double ccw(Platform * p1, Platform * p2, Platform * p3) {
+  return (p2->x - p1->x)*(p3->y - p1->y) - (p2->y - p1->y)*(p3->x - p1->x);
+}
+
+void convex_hull(Platform * points, size_t npoints, Platform ** const out_hull, size_t * out_hullsize) {
+  Platform * hull;
+  size_t t, k = 0;
+  int64_t i;
+
+  hull = *out_hull;
+
+  for (i = 0; i < (int64_t) npoints; ++i) {
+    while (k >= 2 && ccw(&hull[k-2], &hull[k-1], &points[i]) <= 0) --k;
+    hull[k++] = points[i];
+  }
+
+  for (i = (int64_t) npoints-2, t = k+1; i >= 0; i--) {
+    while (k >= t && ccw(&hull[k-2], &hull[k-1], &points[i]) <= 0) --k;
+    hull[k++] = points[i];
+  }
+
+  *out_hull = hull;
+  *out_hullsize = k;
+}
+#+END_SRC c
+
+*** New Setup in Main
+We need a new array for the convex hull, but the ~furthest~ and ~furthest_dist~ arrays are gone, so this is actually better memory-wise also.
+
+#+BEGIN_SRC c
+Platform * hull = malloc((P+1) * sizeof *hull);
+#+END_SRC
+
+**** A4
+Inserting the two dummy vertices we need and the A4-activities is just a matter of running through the platforms.
+
+#+BEGIN_SRC c
+  for (uint32_t i = 0; i < P; i++) {
+    Platform const p = ps[i];
+
+    // Vertex -> edge capacities
+    insert_flow_edge(&G, p.n, p.n+1*P, p.a1);
+    insert_flow_edge(&G, p.n, p.n+3*P, p.a3);
+
+    // A4 (EOF)
+    insert_flow_edge(&G, p.n, P-1, p.a4);
+   }
+#+END_SRC
+
+**** A1
+I've expanded the sorting functions to take a comparator as argument, see playground.c in this repo for details, so we can easily sort first by y-coordinate, then x, with y for breaking ties.
+
+By sorting by y, all platforms on the same vertical line will be put next to each other.
+Then for each platform, we can run forward in the array and while the coordinate matches construct an activity between the two.
+
+We sort by x,y last, so the input is sorted for constructing the convex hull and A3-activities.
+
+#+BEGIN_SRC c
+  // A1 (NEWS)
+  sort(ps, P, lessy);
+
+  for (size_t i = 0; i < P; i++) {
+    Platform const p = ps[i];
+    for (size_t j = i+1; j < P && ps[j].y == p.y; j++) {
+      insert_flow_edge(&G, p.n+P, ps[j].n, p.a1);
+      insert_flow_edge(&G, ps[j].n+P, p.n, ps[j].a1);
+    }
+  }
+
+  sort(ps, P, lessxy);
+
+  for (size_t i = 0; i < P; i++) {
+    Platform const p = ps[i];
+    for (size_t j = i+1; j < P && ps[j].x == p.x; j++) {
+      insert_flow_edge(&G, p.n+P, ps[j].n, p.a1);
+      insert_flow_edge(&G, ps[j].n+P, p.n, ps[j].a1);
+    }
+  }
+#+END_SRC
+
+**** A2
+The idea here is straight-forward.
+From any platform, the platform furthest away must be on the convex hull, so only look at these.
+
+#+BEGIN_SRC c
+  // A2 (Human Cannon)
+
+  size_t hull_size;
+  convex_hull(ps, P, &hull, &hull_size);
+
+  for (size_t i = 0; i < P; i++) {
+    Platform const p = ps[i];
+    uint32_t furthest = UINT_MAX;
+    int64_t furthest_dist = 0;
+
+    for (size_t j = 0; j < (size_t) hull_size; j++) {
+      Platform const q = hull[j];
+      if (p.n == q.n) continue;
+
+      int64_t const dx = p.x - q.x, dy = p.y - q.y;
+      int64_t const dist = dx*dx + dy*dy;
+
+      if (dist > furthest_dist || (dist == furthest_dist && q.n < furthest)) {
+        furthest = q.n;
+        furthest_dist = dist;
+      }
+    }
+
+    insert_flow_edge(&G, p.n, furthest, p.a2);
+  }
+#+END_SRC
+
+**** A3
+The A3-solution is the same as previously, but easier to understand because the rest of the activities are constructed separately.
+
+#+BEGIN_SRC c
+  // A3 (Platform Trampoline)
+  for (uint32_t i = 0; i < P; i++) {
+    Platform const p = ps[i];
+    if (p.a3 == 0) continue;
+
+    for (uint32_t j = i+1; j < P; j++) {
+      Platform const q = ps[j];
+
+      int64_t const dx = p.x - q.x, dy = p.y - q.y;
+
+      float const fslope = (float) dy / dx;
+      uint32_t slope;
+      memcpy(&slope, &fslope, sizeof slope);
+      if (update_slope_count(slopes, counts, n_slopes, slope)) {
+        insert_flow_edge(&G, p.n+3*P, q.n, p.a3);
+        insert_flow_edge(&G, q.n+3*P, p.n, q.a3);
+      }
+
+    }
+
+    memset(counts, 0, n_slopes * sizeof *counts);
+  }
+#+END_SRC
+
 * Sample running times
+
+** Original
 I've included the input size (in parenthesis) and running times for the largest input given, in table [[tab:times]], generated by the implementation.
 The time taken to solve different inputs of the same size can vary greatly based on how many platforms are on line, their capacities etc.
 This is just to get an idea about where the time is spent.
@@ -894,6 +1062,23 @@ INPUT:   9.81	SORT:   0.70	SETUP: 458.47	FLOW:   0.30	TOTAL: 469.28
 #+END_SRC
 
 Setup dominates greatly.
+
+** Post-deadline optimizations
+The optimizations described above in italics shaved off a good amount of milliseconds.
+This is still worse than the first place's method of constructing the activities lazily, but not by much because C is so much faster than Python.
+
+#+BEGIN_EXAMPLE
+2680 (2000)
+IN: 1.74, A4: 1.33	A1: 4.90	A2: 0.22	A3: 49.29	FLOW:  0.19	TOTAL: 57.67
+7632 (4000)
+IN: 3.41, A4: 2.63	A1: 27.48	A2: 1.19	A3: 261.92	FLOW:  0.45	TOTAL: 297.08
+199880 (5000)
+IN: 6.87, A4: 3.51	A1: 2.73	A2: 0.46	A3: 128.59	FLOW:  0.14	TOTAL: 142.30
+2420 (6000)
+IN: 5.76, A4: 4.00	A1: 1.97	A2: 0.74	A3: 168.46	FLOW:  0.05	TOTAL: 181.00
+70404 (8000)
+IN: 7.80, A4: 5.63	A1: 5.17	A2: 0.70	A3: 357.18	FLOW:  0.13	TOTAL: 376.62
+#+END_EXAMPLE
 
 * License
 Copyright © 2015 Andreas H. From
