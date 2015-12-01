@@ -61,6 +61,8 @@ typedef struct {
  * PROTOTYPES
  */
 
+typedef bool (*LESS)(Platform, Platform);
+
 Graph graph_alloc(Vertex * const vertices, size_t const V);
 void graph_free(Graph * const G);
 void insert_edge(Graph * const G, uint32_t const from, uint32_t const to, uint32_t const capacity, bool const forwards);
@@ -77,14 +79,19 @@ uint32_t max(uint32_t const a, uint32_t const b);
 void insert_flow_edge(Graph * const  G, uint32_t const from, uint32_t const, uint32_t const capacity);
 uint32_t edmonds_karp(Graph * const G, uint32_t const source, uint32_t const sink, uint32_t * const queue_data, uint8_t * const marked, uint32_t * const caps);
 
+bool lessxy(Platform const a, Platform const b);
+bool lessy(Platform const a, Platform const b);
 void swap_platform(Platform * const a, Platform * const b);
-void quicksort(Platform * const xs, int const lo, int const hi);
-int partition(Platform * const xs, int const lo, int const hi);
-bool less(Platform const a, Platform const b);
-void insertion_sort(Platform * const xs, size_t const len);
+void quicksort(Platform * const xs, int const lo, int const hi, LESS less);
+int partition(Platform * const xs, int const lo, int const hi, LESS less);
+void insertion_sort(Platform * const xs, size_t const len, LESS less);
+void sort(Platform * const ps, size_t const P, LESS less);
 
 uint32_t next_prime(uint32_t const a);
 bool update_slope_count(uint32_t * const slopes, uint8_t * const counts, uint32_t const slopes_len, uint32_t const key);
+
+double ccw(Platform * p1, Platform * p2, Platform * p3);
+void convex_hull(Platform * points, size_t npoints, Platform ** const out_hull, size_t * out_hullsize);
 
 /*
  * GRAPH
@@ -257,11 +264,15 @@ void swap_platform(Platform * a, Platform * b) {
   *b = t;
 }
 
-bool less(Platform const a, Platform const b) {
+bool lessxy(Platform const a, Platform const b) {
   return a.x < b.x || (a.x == b.x && a.y < b.y);
 }
 
-int partition(Platform * const xs, int const lo, int const hi) {
+bool lessy(Platform const a, Platform const b) {
+  return a.y < b.y;
+}
+
+int partition(Platform * const xs, int const lo, int const hi, LESS less) {
   int const idx = rand() % (hi-lo+1) + lo;
   swap_platform(xs+idx, xs+lo);
 
@@ -286,15 +297,15 @@ int partition(Platform * const xs, int const lo, int const hi) {
   return j;
 }
 
-void quicksort(Platform * const xs, int const lo, int const hi) {
+void quicksort(Platform * const xs, int const lo, int const hi, LESS less) {
   if (hi - lo > SORT_CUTOFF) {
-    int const p = partition(xs, lo, hi);
-    quicksort(xs, lo, p-1);
-    quicksort(xs, p+1, hi);
+    int const p = partition(xs, lo, hi, less);
+    quicksort(xs, lo, p-1, less);
+    quicksort(xs, p+1, hi, less);
   }
 }
 
-void insertion_sort(Platform * const xs, size_t const len) {
+void insertion_sort(Platform * const xs, size_t const len, LESS less) {
   for (size_t i = 1; i < len; i++) {
     Platform x = xs[i];
     size_t j = i;
@@ -306,6 +317,11 @@ void insertion_sort(Platform * const xs, size_t const len) {
 
     xs[j] = x;
   }
+}
+
+void sort(Platform * const ps, size_t const P, LESS less) {
+  quicksort(ps, 0, (int) P-1, less);
+  insertion_sort(ps, P, less);
 }
 
 /*
@@ -350,6 +366,35 @@ uint32_t next_prime(uint32_t const a) {
   }
 }
 
+/*
+ * CONVEX HULL
+ */
+
+double ccw(Platform * p1, Platform * p2, Platform * p3) {
+  return (p2->x - p1->x)*(p3->y - p1->y) - (p2->y - p1->y)*(p3->x - p1->x);
+}
+
+void convex_hull(Platform * points, size_t npoints, Platform ** const out_hull, size_t * out_hullsize) {
+  Platform * hull;
+  size_t t, k = 0;
+  int64_t i;
+
+  hull = *out_hull;
+
+  for (i = 0; i < (int64_t) npoints; ++i) {
+    while (k >= 2 && ccw(&hull[k-2], &hull[k-1], &points[i]) <= 0) --k;
+    hull[k++] = points[i];
+  }
+
+  for (i = (int64_t) npoints-2, t = k+1; i >= 0; i--) {
+    while (k >= t && ccw(&hull[k-2], &hull[k-1], &points[i]) <= 0) --k;
+    hull[k++] = points[i];
+  }
+
+  *out_hull = hull;
+  *out_hullsize = k;
+}
+
 
 /*
  * MAIN
@@ -357,7 +402,7 @@ uint32_t next_prime(uint32_t const a) {
 
 int main() {
 #ifndef CODEJUDGE
-  struct timeval t1, t2, t3, t4, t5;
+  struct timeval t1, t2, t3, t4, t5, t6, t7;
   gettimeofday(&t1, NULL);
 #endif
 
@@ -372,12 +417,11 @@ int main() {
   uint32_t const n_slopes = next_prime(VERTEX_FACTOR*P);
 
   Platform * const ps = malloc(P * sizeof *ps);
-  uint32_t * const furthest = calloc(P, sizeof *furthest);
-  int64_t * const furthest_dist = calloc(P, sizeof *furthest_dist);
   Vertex * const vertices = malloc(VERTEX_FACTOR*P * sizeof *vertices);
   uint32_t * const slopes = malloc(n_slopes * sizeof *slopes);
   uint8_t * const counts = calloc(n_slopes, sizeof *counts);
   uint32_t * const caps = malloc(VERTEX_FACTOR*P * sizeof *caps);
+  Platform * hull = malloc((P+1) * sizeof *hull);
 
   Graph G = graph_alloc(vertices, VERTEX_FACTOR*P);
 
@@ -389,13 +433,6 @@ int main() {
 
 #ifndef CODEJUDGE
   gettimeofday(&t2, NULL);
-#endif
-
-  quicksort(ps, 0, (int) P-1);
-  insertion_sort(ps, P);
-
-#ifndef CODEJUDGE
-  gettimeofday(&t3, NULL);
 #endif
 
   /* Vertex schema:
@@ -417,20 +454,78 @@ int main() {
 
     // A4 (EOF)
     insert_flow_edge(&G, p.n+4*P, P-1, p.a4);
+  }
+
+#ifndef CODEJUDGE
+  gettimeofday(&t3, NULL);
+#endif
+
+  // A1 (NEWS)
+  sort(ps, P, lessy);
+
+  for (size_t i = 0; i < P; i++) {
+    Platform const p = ps[i];
+    for (size_t j = i+1; j < P && ps[j].y == p.y; j++) {
+      insert_flow_edge(&G, p.n+P, ps[j].n, p.a1);
+      insert_flow_edge(&G, ps[j].n+P, p.n, ps[j].a1);
+    }
+  }
+
+  sort(ps, P, lessxy);
+
+  for (size_t i = 0; i < P; i++) {
+    Platform const p = ps[i];
+    for (size_t j = i+1; j < P && ps[j].x == p.x; j++) {
+      insert_flow_edge(&G, p.n+P, ps[j].n, p.a1);
+      insert_flow_edge(&G, ps[j].n+P, p.n, ps[j].a1);
+    }
+  }
+
+
+#ifndef CODEJUDGE
+  gettimeofday(&t4, NULL);
+#endif
+
+  // A2 (Human Cannon)
+
+  size_t hull_size;
+  convex_hull(ps, P, &hull, &hull_size);
+
+  for (size_t i = 0; i < P; i++) {
+    Platform const p = ps[i];
+    uint32_t furthest = UINT_MAX;
+    int64_t furthest_dist = 0;
+
+    for (size_t j = 0; j < (size_t) hull_size; j++) {
+      Platform const q = hull[j];
+      if (p.n == q.n) continue;
+
+      int64_t const dx = p.x - q.x, dy = p.y - q.y;
+      int64_t const dist = dx*dx + dy*dy;
+
+      if (dist > furthest_dist || (dist == furthest_dist && q.n < furthest)) {
+        furthest = q.n;
+        furthest_dist = dist;
+      }
+    }
+
+    insert_flow_edge(&G, p.n+2*P, furthest, p.a2);
+  }
+
+#ifndef CODEJUDGE
+  gettimeofday(&t5, NULL);
+#endif
+
+  // A3 (Platform Trampoline)
+  for (uint32_t i = 0; i < P; i++) {
+    Platform const p = ps[i];
+    if (p.a3 == 0) continue;
 
     for (uint32_t j = i+1; j < P; j++) {
       Platform const q = ps[j];
 
-      int64_t const dx = p.x - q.x;
-      int64_t const dy = p.y - q.y;
+      int64_t const dx = p.x - q.x, dy = p.y - q.y;
 
-      // A1 (NEWS)
-      if (!dx || !dy) {
-        insert_flow_edge(&G, p.n+P, q.n, p.a1);
-        insert_flow_edge(&G, q.n+P, p.n, q.a1);
-      }
-
-      // A3 (Platform Trampoline)
       float const fslope = (float) dy / dx;
       uint32_t slope;
       memcpy(&slope, &fslope, sizeof slope);
@@ -439,55 +534,45 @@ int main() {
         insert_flow_edge(&G, q.n+3*P, p.n, q.a3);
       }
 
-      int64_t const dist = dx*dx + dy*dy;
-      if (dist > furthest_dist[p.n] || (dist == furthest_dist[p.n] && q.n < furthest[p.n])) {
-        furthest[p.n] = q.n;
-        furthest_dist[p.n] = dist;
-      }
-
-      if (dist > furthest_dist[q.n] || (dist == furthest_dist[q.n] && p.n < furthest[q.n])) {
-        furthest[q.n] = p.n;
-        furthest_dist[q.n] = dist;
-      }
     }
-
-    // A2 (Human Cannon)
-    insert_flow_edge(&G, p.n+2*P, furthest[p.n], p.a2);
 
     memset(counts, 0, n_slopes * sizeof *counts);
   }
 
 #ifndef CODEJUDGE
-  gettimeofday(&t4, NULL);
+  gettimeofday(&t6, NULL);
 #endif
 
   uint32_t const flow = edmonds_karp(&G, 0, P-1, slopes, counts, caps);
   printf("%u\n", flow);
 
   free(ps);
-  free(furthest);
-  free(furthest_dist);
   free(slopes);
   free(counts);
   free(caps);
-  free(vertices);
+  free(hull);
 
 #ifndef CODEJUDGE
-  gettimeofday(&t5, NULL);
+  gettimeofday(&t7, NULL);
 
   graph_free(&G);
+  free(vertices);
 
   double const input_time = (t2.tv_sec - t1.tv_sec) * 1000.0 + (t2.tv_usec - t1.tv_usec) / 1000.0;
 
-  double const sort_time = (t3.tv_sec - t2.tv_sec) * 1000.0 + (t3.tv_usec - t2.tv_usec) / 1000.0;
+  double const a4_time = (t3.tv_sec - t2.tv_sec) * 1000.0 + (t3.tv_usec - t2.tv_usec) / 1000.0;
 
-  double const setup_time = (t4.tv_sec - t3.tv_sec) * 1000.0 + (t4.tv_usec - t3.tv_usec) / 1000.0;
+  double const a1_time = (t4.tv_sec - t3.tv_sec) * 1000.0 + (t4.tv_usec - t3.tv_usec) / 1000.0;
 
-  double const flow_time = (t5.tv_sec - t4.tv_sec) * 1000.0 + (t5.tv_usec - t4.tv_usec) / 1000.0;
+  double const a2_time = (t5.tv_sec - t4.tv_sec) * 1000.0 + (t5.tv_usec - t4.tv_usec) / 1000.0;
 
-  double const total_time = (t5.tv_sec - t1.tv_sec) * 1000.0 + (t5.tv_usec - t1.tv_usec) / 1000.0;
+  double const a3_time = (t6.tv_sec - t5.tv_sec) * 1000.0 + (t6.tv_usec - t5.tv_usec) / 1000.0;
 
-  printf("INPUT: %6.2f\tSORT: %6.2f\tSETUP: %6.2f\tFLOW: %6.2f\tTOTAL: %6.2f\n", input_time, sort_time, setup_time, flow_time, total_time);
+  double const flow_time = (t7.tv_sec - t6.tv_sec) * 1000.0 + (t7.tv_usec - t6.tv_usec) / 1000.0;
+
+  double const total_time = (t7.tv_sec - t1.tv_sec) * 1000.0 + (t7.tv_usec - t1.tv_usec) / 1000.0;
+
+  printf("IN: %3.2f, A4: %4.2f\tA1: %4.2f\tA2: %3.2f\tA3: %5.2f\tFLOW: %5.2f\tTOTAL: %5.2f\n", input_time, a4_time, a1_time, a2_time, a3_time, flow_time, total_time);
 #endif
 
   return 0;
