@@ -452,9 +452,11 @@ int main() {
 
   for (size_t i = 0; i < P; i++) {
     Platform const p = ps[i];
-    for (size_t j = i+1; j < P && ps[j].y == p.y; j++) {
-      insert_flow_edge(&G, p.n+P, ps[j].n, p.a1);
-      insert_flow_edge(&G, ps[j].n+P, p.n, ps[j].a1);
+    if (p.a1 > 0) {
+      for (size_t j = i+1; j < P && ps[j].y == p.y; j++) {
+        insert_flow_edge(&G, p.n+P, ps[j].n, p.a1);
+        insert_flow_edge(&G, ps[j].n+P, p.n, ps[j].a1);
+      }
     }
   }
 
@@ -462,9 +464,11 @@ int main() {
 
   for (size_t i = 0; i < P; i++) {
     Platform const p = ps[i];
-    for (size_t j = i+1; j < P && ps[j].x == p.x; j++) {
-      insert_flow_edge(&G, p.n+P, ps[j].n, p.a1);
-      insert_flow_edge(&G, ps[j].n+P, p.n, ps[j].a1);
+    if (p.a1 > 0) {
+      for (size_t j = i+1; j < P && ps[j].x == p.x; j++) {
+        insert_flow_edge(&G, p.n+P, ps[j].n, p.a1);
+        insert_flow_edge(&G, ps[j].n+P, p.n, ps[j].a1);
+      }
     }
   }
 
@@ -484,20 +488,22 @@ int main() {
     uint32_t furthest = UINT_MAX;
     int64_t furthest_dist = 0;
 
-    for (size_t j = 0; j < (size_t) hull_size; j++) {
-      Platform const q = hull[j];
-      if (p.n == q.n) continue;
+    if (p.a2 > 0) {
+      for (size_t j = 0; j < (size_t) hull_size; j++) {
+        Platform const q = hull[j];
+        if (p.n == q.n) continue;
 
-      int64_t const dx = p.x - q.x, dy = p.y - q.y;
-      int64_t const dist = dx*dx + dy*dy;
+        int64_t const dx = p.x - q.x, dy = p.y - q.y;
+        int64_t const dist = dx*dx + dy*dy;
 
-      if (dist > furthest_dist || (dist == furthest_dist && q.n < furthest)) {
-        furthest = q.n;
-        furthest_dist = dist;
+        if (dist > furthest_dist || (dist == furthest_dist && q.n < furthest)) {
+          furthest = q.n;
+          furthest_dist = dist;
+        }
       }
-    }
 
-    insert_flow_edge(&G, p.n, furthest, p.a2);
+      insert_flow_edge(&G, p.n, furthest, p.a2);
+    }
   }
 
 #ifndef CODEJUDGE
