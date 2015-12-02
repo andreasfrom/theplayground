@@ -145,6 +145,7 @@ The final graph which we can run a standard flow algorithm on is given in figure
 The original vertices are black, as are their edges to the new vertices.
 The new vertices are colored by the activity whose capacity they match.
 Compare this to one of the first four graphs: All edges are still there, they just start at one of the new nodes, but still go to an original node.
+The outgoing edges of the new dummy vertices without labels can have unlimited capacity or the same capacity as the corresponding platform.
 
 #+NAME: fig:a1234all
 #+CAPTION: The final flow network
