@@ -24,6 +24,7 @@ clang -g -O2 -Weverything -std=c11 playground.c -o playground
 
 Unfortunately GitHub doesn't support [[http://orgmode.org/][org]] files fully, so the references don't work.
 I hope the it's clear from context what is meant.
+If not, the document [[https://cdn.rawgit.com/andreasfrom/theplayground/f1f127b4a76a865c6cf4735b5598dcdb47d1eb34/README.html][is also available as HTML]], but with different styling.
 
 [[https://github.com/andreasfrom/theplayground/tree/4f65b0a7427092997b9cae86aa2c68850bcea8b0][This commit]] describes the solution I handed in.
 In this past week since that, I've made some improvements; it is this improved solution that I will describe below as it also has the benefit of being clearer.
