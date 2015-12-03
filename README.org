@@ -889,6 +889,9 @@ Now the platforms are sorted so we can create the convex hull and use this for c
 I was very curious how to hash floating point values, but simply copying the bits verbatim into an unsigned integer works really well.
 I use this as the key also instead of the float, because they are identical anyway and this avoids a warning about unsafe comparison of floating point values.
 
+Note that this is probably unsafe since floating point operations aren't exact.
+Instead we should reduce the fraction and use the numerator and denominator as keys.
+
 Two arrays comprise the hash table, the slopes/keys and counts/values and it is enough to clear the counts to clear the hash table as I've implemented it.
 This saves a constant factor because the byte array of counts takes up a quarter of the space of the 4 byte slopes.
 
